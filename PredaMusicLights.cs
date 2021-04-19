@@ -14,6 +14,12 @@ namespace Preda
     {
         public struct ColorGradientData
         {
+            public ColorGradientData(Color c, float t)
+            {
+                Color = c;
+                time = t;
+            }
+
             public Color Color;
             public float time;
         }
@@ -52,18 +58,35 @@ namespace Preda
             GradientData = Gradient;
         }
 
+        public void Init(int SampleAmount)
+        {
+            Samples = SampleAmount;
+            loudAverage.Add((0, 0));
+            GradientData = new ColorGradientData[] {
+                new ColorGradientData(Color.FromArgb(255,99,0,255),0),
+                new ColorGradientData(Color.FromArgb(255,99,0,255),0.0264744f),
+                new ColorGradientData(Color.FromArgb(255,0,12,255),0.06764325f),
+                new ColorGradientData(Color.FromArgb(255,238,0,255),0.1705959f),
+                new ColorGradientData(Color.FromArgb(255,255,0,0),0.3911803f),
+                new ColorGradientData(Color.FromArgb(255,255,230,0),0.5764706f),
+                new ColorGradientData(Color.FromArgb(255,0,255,36),0.7323567f),
+                new ColorGradientData(Color.FromArgb(255,0,209,255),0.8500038f),
+                new ColorGradientData(Color.FromArgb(255,0,209,255),1)
+            };
+        }
+
         public void SetAudioData(float[] newData)
         {
             AudioData = newData;
         }
 
-        public Color Update(float newTime, float newDeltaTime, float[] AudioData)
+        public Color Update(float newTime, float[] AudioData)
         {
+            DeltaTime = newTime - Time;
             Time = newTime;
-            DeltaTime = newDeltaTime;
             SetAudioData(AudioData);
 
-            hue = Remap((float)Math.Sin((Time * HueChangeMultiplier) + peakIndex), -1, 1, 0, 256);
+            hue = Remap((float)Math.Sin((Time * HueChangeMultiplier) + peakIndex), -1, 1, 0, 255);
 
             for (int i = 0; i < loudAverage.Count; i++)
             {
@@ -107,7 +130,7 @@ namespace Preda
             if (currentLoudest > min)
             {
                 RGBToHSV(GetColorGradientData(loudestIndexAvrg), out float H, out float S, out float V);
-                Color newColor = HSVToRGB(H + hue > 256 ? H + hue - 256 : H + hue, S, V);
+                Color newColor = HSVToRGB(H + hue > 255 ? H + hue - 255 : H + hue, S, V);
 
                 LastColor = newColor;
                 lastTime = Time;
