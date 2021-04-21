@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
+//using UnityEngine;
 using Color = System.Drawing.Color;
 
 namespace Preda
@@ -39,29 +40,37 @@ namespace Preda
         public float FadeMultiplier = 4;
         public float HueChangeMultiplier = 0.1f;
         public float FadeAddMultiplier = 0.05f;
+        public float ActivationCooldown = 0.75f;
+
+        public uint SampleSets = 3;
 
         //Internal Values
-        private List<ValueTuple<float, float>> loudAverage = new List<ValueTuple<float, float>>();
+        private List<List<ValueTuple<float, float>>> loudAverage = new List<List<ValueTuple<float, float>>>();
+        private List<ValueTuple<float, float>> activationLoudAverage = new List<ValueTuple<float, float>>();
+        private float activationMin;
+        private int lastSampleSet;
+        private List<float> lastActivation = new List<float>();
+        private List<float> min = new List<float>();
+        private List<float> loudest = new List<float>();
+        private List<float> lastLoudest = new List<float>();
+        private List<float> lastTime = new List<float>();
+        private List<float> lastLoudIndex = new List<float>();
+
+        private float lastActivationLoudness;
+        private float lastActivationTime;
 
         private Color LastColor = Color.Black;
-        private float lastLoudest;
-        private float lastTime;
-        private float lastLoudIndex;
         private float peakIndex = 0;
-        private float min;
         private float hue = 0;
 
         public void Init(int SampleAmount, ColorGradientData[] Gradient)
         {
-            Samples = SampleAmount;
-            loudAverage.Add((0, 0));
             GradientData = Gradient;
+            DoInit(SampleAmount);
         }
 
         public void Init(int SampleAmount)
         {
-            Samples = SampleAmount;
-            loudAverage.Add((0, 0));
             GradientData = new ColorGradientData[] {
                 new ColorGradientData(Color.FromArgb(255,99,0,255),0),
                 new ColorGradientData(Color.FromArgb(255,99,0,255),0.0264744f),
@@ -73,6 +82,23 @@ namespace Preda
                 new ColorGradientData(Color.FromArgb(255,0,209,255),0.8500038f),
                 new ColorGradientData(Color.FromArgb(255,0,209,255),1)
             };
+            DoInit(SampleAmount);
+        }
+
+        private void DoInit(int SampleAmount)
+        {
+            Samples = SampleAmount;
+
+            for (int i = 0; i < SampleSets; i++)
+            {
+                loudAverage.Add(new List<(float, float)>());
+                min.Add(0);
+                loudest.Add(0);
+                lastLoudest.Add(0);
+                lastTime.Add(0);
+                lastLoudIndex.Add(0);
+                lastActivation.Add(0);
+            }
         }
 
         public void SetAudioData(float[] newData)
@@ -88,32 +114,114 @@ namespace Preda
 
             hue = Remap((float)Math.Sin((Time * HueChangeMultiplier) + peakIndex), -1, 1, 0, 255);
 
-            for (int i = 0; i < loudAverage.Count; i++)
+            for (int i = 0; i < activationLoudAverage.Count; i++)
             {
-                if (Time - loudAverage[i].Item2 > DataGatherTime)
+                if (Time - activationLoudAverage[i].Item2 > DataGatherTime)
                 {
-                    loudAverage.RemoveAt(i);
+                    activationLoudAverage.RemoveAt(i);
                 }
             }
 
-            if (loudAverage.Count > 0)
+            if (activationLoudAverage.Count > 0)
             {
                 float averageMin = 0;
-                foreach (var f in loudAverage)
+                foreach (var f in activationLoudAverage)
                 {
                     averageMin += f.Item1;
                 }
-                averageMin /= loudAverage.Count;
-                min = averageMin * LoudAverageMultiplier;
+                averageMin /= activationLoudAverage.Count;
+
+                activationMin = averageMin * LoudAverageMultiplier;
+                //min = currentSet[loudAverage.Count - 1].Item1 * LoudAverageMultiplier;
+            }
+
+            for (int i = 0; i < SampleSets; i++)
+            {
+                UpdateSampleSet(i);
+            }
+
+            List<int> activeSets = new List<int>();
+            for (int i = 0; i < SampleSets; i++)
+            {
+                if (lastTime[i] == Time)
+                {
+                    activeSets.Add(i);
+                }
+            }
+
+            float loudestSetValue = 0;
+            int loudestSet = 0;
+            bool found = false;
+            foreach (int i in activeSets)
+            {
+                float _loudest = loudest[i] * (ActivationCooldown + (Time - lastActivation[i]));
+                if (_loudest > loudestSetValue)
+                {
+                    //Debug.Log(_loudest + " | " + loudest[i] + " | Time: " + Time + " | Activating: " + activationMin);
+
+                    loudestSetValue = _loudest;
+                    loudestSet = i;
+                    found = true;
+                }
+            }
+
+            float loudestIndexAvrg = (float)lastLoudIndex[loudestSet] / (float)Samples;
+
+            if (loudestSetValue > activationMin && found)
+            {
+                RGBToHSV(GetColorGradientData(loudestIndexAvrg), out float H, out float S, out float V);
+                Color newColor = HSVToRGB(H + hue > 255 ? H + hue - 255 : H + hue, S, V);
+
+                //Debug.Log("Activated: " + loudestSet + " | " + loudestSetValue + " | " + activationMin);
+
+                LastColor = newColor;
+                lastActivationTime = Time;
+                activationLoudAverage.Add((loudest[loudestSet], Time));
+                lastActivationLoudness = loudest[loudestSet];
+                lastSampleSet = loudestSet;
+
+                lastActivation[loudestSet] = Time;
+
+                return newColor;
+            }
+
+            return LerpColor(LastColor, BaseColor, (1 - (lastLoudest[lastSampleSet] / lastActivationLoudness)) + ((Time - lastActivationTime) * FadeMultiplier) + 0.05f);
+        }
+
+        private void UpdateSampleSet(int sampleSet)
+        {
+            var currentSet = loudAverage[sampleSet];
+
+            for (int i = 0; i < currentSet.Count; i++)
+            {
+                if (Time - currentSet[i].Item2 > DataGatherTime)
+                {
+                    currentSet.RemoveAt(i);
+                }
+            }
+
+            if (currentSet.Count > 0)
+            {
+                float averageMin = 0;
+                foreach (var f in currentSet)
+                {
+                    averageMin += f.Item1;
+                }
+                averageMin /= currentSet.Count;
+
+                min[sampleSet] = averageMin * LoudAverageMultiplier;
+                //min = currentSet[loudAverage.Count - 1].Item1 * LoudAverageMultiplier;
             }
             else
             {
-                loudAverage.Add((0, Time));
+                currentSet.Add((0, Time));
             }
+
+            int _samples = (int)(Samples / SampleSets);
 
             int LoudestIndex = 0;
             float Loudest = 0;
-            for (int i = 0; i < Samples; i++)
+            for (int i = _samples * sampleSet; i < _samples * (sampleSet + 1); i++)
             {
                 float current = GetAudioData(i);
                 if (current > Loudest)
@@ -123,29 +231,20 @@ namespace Preda
                 }
             }
 
-            float loudestIndexAvrg = (float)LoudestIndex / (float)Samples;
+            //float loudestIndexAvrg = (float)LoudestIndex / (float)Samples;
 
             float currentLoudest = Loudest;
 
-            if (currentLoudest > min)
+            if (currentLoudest > min[sampleSet])
             {
-                RGBToHSV(GetColorGradientData(loudestIndexAvrg), out float H, out float S, out float V);
-                Color newColor = HSVToRGB(H + hue > 255 ? H + hue - 255 : H + hue, S, V);
-
-                LastColor = newColor;
-                lastTime = Time;
-                lastLoudest = currentLoudest;
+                lastTime[sampleSet] = Time;
+                lastLoudest[sampleSet] = loudest[sampleSet];
+                loudest[sampleSet] = currentLoudest;
 
                 peakIndex += FadeAddMultiplier * DeltaTime;
-                lastLoudIndex = LoudestIndex;
+                lastLoudIndex[sampleSet] = LoudestIndex;
 
-                loudAverage.Add((currentLoudest, Time));
-
-                return newColor;
-            }
-            else
-            {
-                return LerpColor(LastColor, BaseColor, (1 - (currentLoudest / lastLoudest)) + ((Time - lastTime) * FadeMultiplier) + 0.05f);
+                loudAverage[sampleSet].Add((currentLoudest, Time));
             }
         }
 
