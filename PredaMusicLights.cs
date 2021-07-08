@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
+using UnityEngine;
 //using UnityEngine;
 using Color = System.Drawing.Color;
 
@@ -25,6 +26,14 @@ namespace Preda
             public float time;
         }
 
+        public struct UpdateData
+        {
+            public Color color;
+            public bool activated;
+            public float activationAmount;
+            public float lastActivationAmount;
+        }
+
         //Data
         public float Time;
         public float DeltaTime;
@@ -40,7 +49,7 @@ namespace Preda
         public float FadeMultiplier = 4;
         public float HueChangeMultiplier = 0.1f;
         public float FadeAddMultiplier = 0.05f;
-        public float ActivationCooldown = 0.75f;
+        public float ActivationCooldown = 0.9f;
 
         public uint SampleSets = 3;
 
@@ -58,10 +67,13 @@ namespace Preda
 
         private float lastActivationLoudness;
         private float lastActivationTime;
+        private float lastActivationDifference;
+        private int lastActivationFrame;
 
         private Color LastColor = Color.Black;
         private float peakIndex = 0;
         private float hue = 0;
+        private int frameCounter;
 
         public void Init(int SampleAmount, ColorGradientData[] Gradient)
         {
@@ -106,8 +118,11 @@ namespace Preda
             AudioData = newData;
         }
 
-        public Color Update(float newTime, float[] AudioData)
+        public UpdateData Update(float newTime, float[] AudioData)
         {
+            frameCounter++;
+            UpdateData toRetrun = new UpdateData();
+
             DeltaTime = newTime - Time;
             Time = newTime;
             SetAudioData(AudioData);
@@ -124,6 +139,8 @@ namespace Preda
 
             if (activationLoudAverage.Count > 0)
             {
+                //Debug.Log("|||" + activationLoudAverage.Count);
+
                 float averageMin = 0;
                 foreach (var f in activationLoudAverage)
                 {
@@ -175,17 +192,32 @@ namespace Preda
                 //Debug.Log("Activated: " + loudestSet + " | " + loudestSetValue + " | " + activationMin);
 
                 LastColor = newColor;
+                if (lastActivationFrame != frameCounter - 1) lastActivationDifference = Time - lastActivationTime;
+                lastActivationFrame = frameCounter;
+                Debug.Log("Diff " + lastActivationDifference + " | Loudest: " + loudestSetValue + " | Multiplier " + (ActivationCooldown + (Time - lastActivation[loudestSet])) + " | Loudest Set: " + loudest[loudestSet] + " | Min: " + activationMin);
                 lastActivationTime = Time;
-                activationLoudAverage.Add((loudest[loudestSet], Time));
-                lastActivationLoudness = loudest[loudestSet];
+                activationLoudAverage.Add((loudestSetValue, Time));
+                toRetrun.lastActivationAmount = lastActivationLoudness;
+                lastActivationLoudness = loudestSetValue;
                 lastSampleSet = loudestSet;
 
                 lastActivation[loudestSet] = Time;
 
-                return newColor;
+                toRetrun.color = newColor;
+                toRetrun.activated = true;
+                toRetrun.activationAmount = loudest[loudestSet];
+
+                return toRetrun;
+            }
+            else
+            {
+                Debug.Log("Loudest " + loudestSetValue + " | Activation Min " + activationMin);
             }
 
-            return LerpColor(LastColor, BaseColor, (1 - (lastLoudest[lastSampleSet] / lastActivationLoudness)) + ((Time - lastActivationTime) * FadeMultiplier) + 0.05f);
+            toRetrun.color = LerpColor(LastColor, BaseColor, (Time - lastActivationTime) / (lastActivationDifference * FadeMultiplier) + 0.05f);
+            toRetrun.activated = false;
+            toRetrun.activationAmount = 0;
+            return toRetrun;
         }
 
         private void UpdateSampleSet(int sampleSet)
