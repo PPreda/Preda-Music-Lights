@@ -32,6 +32,8 @@ namespace Preda
             public bool activated;
             public float activationAmount;
             public float lastActivationAmount;
+            public float activationBrightness;
+            public float expectedActivationDiff;
         }
 
         //Data
@@ -194,29 +196,37 @@ namespace Preda
                 LastColor = newColor;
                 if (lastActivationFrame != frameCounter - 1) lastActivationDifference = Time - lastActivationTime;
                 lastActivationFrame = frameCounter;
-                Debug.Log("Diff " + lastActivationDifference + " | Loudest: " + loudestSetValue + " | Multiplier " + (ActivationCooldown + (Time - lastActivation[loudestSet])) + " | Loudest Set: " + loudest[loudestSet] + " | Min: " + activationMin);
+                //Debug.Log("Diff " + lastActivationDifference + " | Loudest: " + loudestSetValue + " | Multiplier " + (ActivationCooldown + (Time - lastActivation[loudestSet])) + " | Loudest Set: " + loudest[loudestSet] + " | Min: " + activationMin);
                 lastActivationTime = Time;
                 activationLoudAverage.Add((loudestSetValue, Time));
                 toRetrun.lastActivationAmount = lastActivationLoudness;
                 lastActivationLoudness = loudestSetValue;
                 lastSampleSet = loudestSet;
 
+                peakIndex += FadeAddMultiplier * DeltaTime;
+
                 lastActivation[loudestSet] = Time;
 
                 toRetrun.color = newColor;
                 toRetrun.activated = true;
+                toRetrun.activationBrightness = 1;
                 toRetrun.activationAmount = loudest[loudestSet];
+                toRetrun.expectedActivationDiff = lastActivationDifference * FadeMultiplier;
 
                 return toRetrun;
             }
             else
             {
-                Debug.Log("Loudest " + loudestSetValue + " | Activation Min " + activationMin);
+                //Debug.Log("Loudest " + loudestSetValue + " | Activation Min " + activationMin);
             }
 
-            toRetrun.color = LerpColor(LastColor, BaseColor, (Time - lastActivationTime) / (lastActivationDifference * FadeMultiplier) + 0.05f);
+            float lerpValue = (Time - lastActivationTime) / (lastActivationDifference * FadeMultiplier) + 0.05f;
+
+            toRetrun.color = LerpColor(LastColor, BaseColor, lerpValue);
             toRetrun.activated = false;
             toRetrun.activationAmount = 0;
+            toRetrun.activationBrightness = 1 - lerpValue;
+            toRetrun.expectedActivationDiff = lastActivationDifference * FadeMultiplier;
             return toRetrun;
         }
 
@@ -273,7 +283,6 @@ namespace Preda
                 lastLoudest[sampleSet] = loudest[sampleSet];
                 loudest[sampleSet] = currentLoudest;
 
-                peakIndex += FadeAddMultiplier * DeltaTime;
                 lastLoudIndex[sampleSet] = LoudestIndex;
 
                 loudAverage[sampleSet].Add((currentLoudest, Time));
