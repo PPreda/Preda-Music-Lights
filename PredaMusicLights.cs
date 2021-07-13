@@ -153,6 +153,10 @@ namespace Preda
                 activationMin = averageMin * LoudAverageMultiplier;
                 //min = currentSet[loudAverage.Count - 1].Item1 * LoudAverageMultiplier;
             }
+            else
+            {
+                activationMin = 0;
+            }
 
             for (int i = 0; i < SampleSets; i++)
             {
