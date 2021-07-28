@@ -126,14 +126,18 @@ namespace Preda
             {
                 //Debug.Log("|||" + activationLoudAverage.Count);
 
-                float averageMin = 0;
-                foreach (var f in activationLoudAverage)
+                //float averageMin = 0;
+                /*foreach (var f in activationLoudAverage)
                 {
                     averageMin += f.Item1;
-                }
-                averageMin /= activationLoudAverage.Count;
+                }*/
+                //averageMin /= activationLoudAverage.Count;
 
-                activationMin = (averageMin * LoudAverageMultiplier) * (1 - (Time - lastActivationTime) * 0.5f);
+                activationLoudAverage.Sort((x1, x2) => x2.CompareTo(x1));
+
+                float loudest = activationLoudAverage[0].Item1;
+
+                activationMin = (loudest * LoudAverageMultiplier) * (1 - (Time - lastActivationTime) * 0.5f);
                 //Debug.Log((1 - (Time - lastActivationTime) * 0.5f));
                 //min = currentSet[loudAverage.Count - 1].Item1 * LoudAverageMultiplier;
             }
@@ -155,6 +159,8 @@ namespace Preda
                 Color newColor = HSVToRGB(H + hue > 255 ? H + hue - 255 : H + hue, S, V);
 
                 //Debug.Log("Activated: " + loudestSet + " | " + loudestSetValue + " | " + activationMin);
+
+                //Debug.Log("Loudest " + _loudest + " | Activation Min " + activationMin);
 
                 LastColor = newColor;
                 if (lastActivationFrame != frameCounter - 1) lastActivationDifference = Time - lastActivationTime;
