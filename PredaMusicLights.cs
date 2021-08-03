@@ -112,7 +112,7 @@ namespace Preda
             Time = newTime;
             SetAudioData(AudioData);
 
-            hue = Remap((float)Math.Sin((Time * HueChangeMultiplier) + peakIndex), -1, 1, 0, 255);
+            hue = (float)Math.Sin((Time * HueChangeMultiplier) + peakIndex) * 255;
 
             for (int i = 0; i < activationLoudAverage.Count; i++)
             {
@@ -126,18 +126,18 @@ namespace Preda
             {
                 //Debug.Log("|||" + activationLoudAverage.Count);
 
-                //float averageMin = 0;
-                /*foreach (var f in activationLoudAverage)
+                float averageMin = 0;
+                foreach (var f in activationLoudAverage)
                 {
                     averageMin += f.Item1;
-                }*/
-                //averageMin /= activationLoudAverage.Count;
+                }
+                averageMin /= activationLoudAverage.Count;
 
                 activationLoudAverage.Sort((x1, x2) => x2.CompareTo(x1));
 
                 float loudest = activationLoudAverage[0].Item1;
 
-                activationMin = (loudest * LoudAverageMultiplier) * (1 - (Time - lastActivationTime) * 0.5f);
+                activationMin = (((averageMin + loudest) / 2) * LoudAverageMultiplier) * (1 - (Time - lastActivationTime) * 0.5f);
                 //Debug.Log((1 - (Time - lastActivationTime) * 0.5f));
                 //min = currentSet[loudAverage.Count - 1].Item1 * LoudAverageMultiplier;
             }
@@ -155,8 +155,9 @@ namespace Preda
 
             if (_loudest > activationMin && _loudest > ActivationMinLimit)
             {
-                RGBToHSV(GetColorGradientData(lastLoudIndex), out float H, out float S, out float V);
+                RGBToHSV(GetColorGradientData(lastLoudIndex / Samples), out float H, out float S, out float V);
                 Color newColor = HSVToRGB(H + hue > 255 ? H + hue - 255 : H + hue, S, V);
+                //Color newColor = GetColorGradientData(lastLoudIndex / Samples);
 
                 //Debug.Log("Activated: " + loudestSet + " | " + loudestSetValue + " | " + activationMin);
 
@@ -200,7 +201,7 @@ namespace Preda
 
         private void UpdateSampleSet()
         {
-           
+
 
             float Loudest = 0;
 
@@ -210,11 +211,11 @@ namespace Preda
                 if (current > Loudest)
                 {
                     Loudest = current;
+                    lastLoudIndex = i;
                 }
             }
 
-            float currentLoudest = Loudest;
-            loudest = currentLoudest;
+            loudest = Loudest;
         }
 
         private void SetGradient(ColorGradientData[] newData)
